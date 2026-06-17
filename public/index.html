@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crest</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+  header { margin-bottom: 1.5rem; }
+  h1 { margin: 0 0 0.25rem; }
+  .subtitle { color: #888; font-size: 0.9rem; }
+  ol#list { list-style: none; margin: 0; padding: 0; }
+  li.story {
+    padding: 0.9rem 0;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  }
+  li.story:last-child { border-bottom: none; }
+  li.empty { padding: 1rem 0; color: #888; }
+  a.title { color: #ff6600; text-decoration: none; font-weight: 600; }
+  a.title:hover { text-decoration: underline; }
+  .host { color: #888; font-size: 0.85rem; }
+  .meta { color: #888; font-size: 0.85rem; margin-top: 0.25rem; }
+  .meta a { color: #888; }
+  .pager { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; }
+  .pager button {
+    font: inherit;
+    color: #ff6600;
+    background: none;
+    border: 1px solid #ff6600;
+    border-radius: 4px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+  }
+  .pager button:disabled { color: #888; border-color: #888; cursor: default; opacity: 0.5; }
+  .pager span { color: #888; font-size: 0.85rem; }
+  footer { margin-top: 2rem; color: #888; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Crest</h1>
+  <div class="subtitle">Stories that crossed 150+ points, newest first. <span id="checked"></span> <span id="updated"></span></div>
+</header>
+<ol id="list">
+  <li class="empty">Loading…</li>
+</ol>
+<nav class="pager" id="pager" hidden>
+  <button id="prevBtn">&larr; Newer</button>
+  <span id="pageLabel"></span>
+  <button id="nextBtn">Older &rarr;</button>
+</nav>
+<footer>Sourced from the Hacker News (Algolia) API · refreshes every 10 minutes</footer>
+<script>
+function ago(fromUnix, now) {
+  const s = Math.max(0, now - fromUnix);
+  if (s >= 86400) return Math.floor(s / 86400) + ' day(s) ago';
+  if (s >= 3600) return Math.floor(s / 3600) + ' hour(s) ago';
+  if (s >= 60) return Math.floor(s / 60) + ' minute(s) ago';
+  return 'just now';
+}
+
+function domain(u) {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function emoji(firstSeen, hnCreated) {
+  const climb = firstSeen - hnCreated;
+  if (climb <= 4 * 3600) return '🔥 ';
+  if (climb >= 2 * 86400) return '❄️ ';
+  return '';
+}
+
+const pager = document.getElementById('pager');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const pageLabel = document.getElementById('pageLabel');
+let currentPage = 1;
+
+prevBtn.onclick = () => load(currentPage - 1);
+nextBtn.onclick = () => load(currentPage + 1);
+
+async function load(page) {
+  const list = document.getElementById('list');
+  const checked = document.getElementById('checked');
+  const updated = document.getElementById('updated');
+  try {
+    const res = await fetch('/api/stories?page=' + page);
+    if (!res.ok) throw new Error('bad response');
+    const { stories, hasMore, lastPolled } = await res.json();
+    const now = Math.floor(Date.now() / 1000);
+
+    currentPage = page;
+    pager.hidden = page === 1 && !hasMore;
+    pageLabel.textContent = 'Page ' + page;
+    prevBtn.disabled = page === 1;
+    nextBtn.disabled = !hasMore;
+
+    list.textContent = '';
+    checked.textContent = lastPolled ? 'Last checked ' + ago(lastPolled, now) + '.' : '';
+    updated.textContent = page === 1 && stories.length ? 'Newest added ' + ago(stories[0].first_seen, now) + '.' : '';
+
+    if (stories.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = page === 1
+        ? 'No stories yet — the poller runs every 10 minutes.'
+        : 'No more stories.';
+      list.appendChild(li);
+      return;
+    }
+
+    for (const s of stories) {
+      const hnUrl = 'https://news.ycombinator.com/item?id=' + s.id;
+      const linkUrl = s.url || hnUrl;
+
+      const li = document.createElement('li');
+      li.className = 'story';
+
+      const titleLink = document.createElement('a');
+      titleLink.className = 'title';
+      titleLink.href = linkUrl;
+      titleLink.rel = 'noopener';
+      titleLink.textContent = s.title;
+      li.appendChild(titleLink);
+
+      if (s.url) {
+        const host = document.createElement('span');
+        host.className = 'host';
+        host.textContent = ' (' + domain(s.url) + ')';
+        li.appendChild(host);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.appendChild(document.createTextNode(emoji(s.first_seen, s.hn_created) + s.points + '+ points · '));
+      const commentsLink = document.createElement('a');
+      commentsLink.href = hnUrl;
+      commentsLink.rel = 'noopener';
+      commentsLink.textContent = s.comments + ' comments';
+      meta.appendChild(commentsLink);
+      meta.appendChild(document.createTextNode(' · posted ' + ago(s.hn_created, now) + ' · added ' + ago(s.first_seen, now)));
+      li.appendChild(meta);
+
+      list.appendChild(li);
+    }
+  } catch {
+    pager.hidden = true;
+    list.textContent = '';
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = "Couldn't load stories. Try refreshing.";
+    list.appendChild(li);
+  }
+}
+
+load(1);
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+name = "crest"
+main = "src/index.ts"
+compatibility_date = "2026-06-17"
+
+# Serve the static frontend from ./public. A request that matches a file there
+# ("/" -> index.html) is served directly; anything else (/api/stories) falls
+# through to the Worker.
+[assets]
+directory = "./public"
+
+# Created with: pnpm exec wrangler d1 create crest
+# Paste the printed database_id below.
+[[d1_databases]]
+binding = "crest"
+database_name = "crest"
+database_id = "d7b01de9-212d-43e5-9334-b0ad707809df"
+
+# Poll Hacker News every 10 minutes.
+[triggers]
+crons = ["*/10 * * * *"]
