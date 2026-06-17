@@ -150,6 +150,66 @@ app.get('/api/stories', async (c) => {
   });
 });
 
+const FEED_ITEM_LIMIT = 30; // fixed batch size for the RSS feed (no pagination)
+
+// Escape XML special characters in user-controlled text before interpolating
+// into the feed template.
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+app.get('/feed.xml', async (c) => {
+  const { results } = await c.env.crest.prepare(
+    `SELECT id, title, url, points, num_comments, hn_created, first_seen
+       FROM stories
+      ORDER BY first_seen DESC
+      LIMIT ?`,
+  )
+    .bind(FEED_ITEM_LIMIT)
+    .all<{
+      id: number;
+      title: string;
+      url: string | null;
+      points: number;
+      num_comments: number;
+      hn_created: number;
+      first_seen: number;
+    }>();
+
+  const items = results
+    .map((s) => {
+      const hnUrl = `https://news.ycombinator.com/item?id=${s.id}`;
+      const linkUrl = s.url || hnUrl;
+      const pubDate = new Date(s.first_seen * 1000).toUTCString();
+      return `    <item>
+      <title>${escapeXml(s.title)}</title>
+      <link>${escapeXml(linkUrl)}</link>
+      <guid isPermaLink="false">crest-${s.id}</guid>
+      <pubDate>${pubDate}</pubDate>
+      <description>${escapeXml(`${s.points} points · ${s.num_comments} comments`)}</description>
+    </item>`;
+    })
+    .join('\n');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Crest</title>
+    <link>https://crest.byt3h3ad.workers.dev/</link>
+    <description>Stories that crossed 150+ points, newest first.</description>
+${items}
+  </channel>
+</rss>`;
+
+  c.header('Cache-Control', 'public, max-age=300');
+  return c.body(xml, 200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
+});
+
 export default {
   fetch: app.fetch,
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
