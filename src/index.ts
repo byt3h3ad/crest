@@ -108,24 +108,42 @@ app.get('/api/stories', async (c) => {
   const pageSize = envNumber(c.env.PAGE_SIZE, DEFAULT_PAGE_SIZE);
   const page = Math.max(1, Number(c.req.query('page')) || 1);
   const offset = (page - 1) * pageSize;
+  const domainFilter = c.req.query('domain');
 
   // Fetch one extra row to know if a next page exists, without a separate COUNT query.
-  const { results } = await c.env.crest.prepare(
-    `SELECT id, title, url, points, num_comments, hn_created, first_seen
-       FROM stories
-      ORDER BY first_seen DESC
-      LIMIT ? OFFSET ?`,
-  )
-    .bind(pageSize + 1, offset)
-    .all<{
-      id: number;
-      title: string;
-      url: string | null;
-      points: number;
-      num_comments: number;
-      hn_created: number;
-      first_seen: number;
-    }>();
+  type StoryRow = {
+    id: number;
+    title: string;
+    url: string | null;
+    points: number;
+    num_comments: number;
+    hn_created: number;
+    first_seen: number;
+  };
+
+  const { results } = domainFilter
+    ? await c.env.crest.prepare(
+        `SELECT id, title, url, points, num_comments, hn_created, first_seen
+           FROM stories
+          WHERE (
+            url LIKE 'http://' || ?1 OR url LIKE 'http://' || ?1 || '/%'
+            OR url LIKE 'https://' || ?1 OR url LIKE 'https://' || ?1 || '/%'
+            OR url LIKE 'http://www.' || ?1 OR url LIKE 'http://www.' || ?1 || '/%'
+            OR url LIKE 'https://www.' || ?1 OR url LIKE 'https://www.' || ?1 || '/%'
+          )
+          ORDER BY first_seen DESC
+          LIMIT ?2 OFFSET ?3`,
+      )
+        .bind(domainFilter, pageSize + 1, offset)
+        .all<StoryRow>()
+    : await c.env.crest.prepare(
+        `SELECT id, title, url, points, num_comments, hn_created, first_seen
+           FROM stories
+          ORDER BY first_seen DESC
+          LIMIT ? OFFSET ?`,
+      )
+        .bind(pageSize + 1, offset)
+        .all<StoryRow>();
 
   const hasMore = results.length > pageSize;
 
@@ -147,6 +165,7 @@ app.get('/api/stories', async (c) => {
     page,
     hasMore,
     lastPolled: lastPoll?.v ?? null,
+    domain: domainFilter ?? null,
   });
 });
 

@@ -47,7 +47,7 @@
 <body>
 <header>
   <h1>Crest</h1>
-  <div class="subtitle">Stories that crossed 150+ points, newest first. <span id="checked"></span> <span id="updated"></span></div>
+  <div class="subtitle">Stories that crossed 150+ points, newest first. <span id="checked"></span> <span id="updated"></span> <span id="filterState"></span></div>
 </header>
 <ol id="list">
   <li class="empty">Loading…</li>
@@ -87,6 +87,7 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const pageLabel = document.getElementById('pageLabel');
 let currentPage = 1;
+let currentDomain = null;
 
 prevBtn.onclick = () => load(currentPage - 1);
 nextBtn.onclick = () => load(currentPage + 1);
@@ -95,8 +96,11 @@ async function load(page) {
   const list = document.getElementById('list');
   const checked = document.getElementById('checked');
   const updated = document.getElementById('updated');
+  const filterState = document.getElementById('filterState');
   try {
-    const res = await fetch('/api/stories?page=' + page);
+    const params = new URLSearchParams({ page: String(page) });
+    if (currentDomain) params.set('domain', currentDomain);
+    const res = await fetch('/api/stories?' + params.toString());
     if (!res.ok) throw new Error('bad response');
     const { stories, hasMore, lastPolled } = await res.json();
     const now = Math.floor(Date.now() / 1000);
@@ -110,6 +114,21 @@ async function load(page) {
     list.textContent = '';
     checked.textContent = lastPolled ? 'Last checked ' + ago(lastPolled, now) + '.' : '';
     updated.textContent = page === 1 && stories.length ? 'Newest added ' + ago(stories[0].first_seen, now) + '.' : '';
+
+    filterState.textContent = '';
+    if (currentDomain) {
+      filterState.appendChild(document.createTextNode('Filtered by ' + currentDomain + ' ('));
+      const clearLink = document.createElement('a');
+      clearLink.href = '#';
+      clearLink.textContent = 'clear';
+      clearLink.onclick = (e) => {
+        e.preventDefault();
+        currentDomain = null;
+        load(1);
+      };
+      filterState.appendChild(clearLink);
+      filterState.appendChild(document.createTextNode(')'));
+    }
 
     if (stories.length === 0) {
       const li = document.createElement('li');
@@ -136,9 +155,15 @@ async function load(page) {
       li.appendChild(titleLink);
 
       if (s.url) {
-        const host = document.createElement('span');
+        const host = document.createElement('a');
+        host.href = '#';
         host.className = 'host';
         host.textContent = ' (' + domain(s.url) + ')';
+        host.onclick = (e) => {
+          e.preventDefault();
+          currentDomain = domain(s.url);
+          load(1);
+        };
         li.appendChild(host);
       }
 
