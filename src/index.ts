@@ -2,12 +2,23 @@ import { Hono } from 'hono';
 
 export interface Env {
   crest: D1Database;
+  SCORE_TARGET?: string;
+  WINDOW_DAYS?: string;
+  HITS_PER_PAGE?: string;
+  PAGE_SIZE?: string;
 }
 
-const SCORE_TARGET = 150; // points threshold
-const WINDOW_DAYS = 7; // late-bloomer tolerance
-const HITS_PER_PAGE = 1000; // must exceed qualifying stories in the window
-const PAGE_SIZE = 20; // stories per page
+const DEFAULT_SCORE_TARGET = 150; // points threshold
+const DEFAULT_WINDOW_DAYS = 7; // late-bloomer tolerance
+const DEFAULT_HITS_PER_PAGE = 1000; // must exceed qualifying stories in the window
+const DEFAULT_PAGE_SIZE = 20; // stories per page
+
+// Vars arrive as strings (or unset); fall back to the default on unset or NaN.
+function envNumber(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const n = Number(value);
+  return Number.isNaN(n) ? fallback : n;
+}
 
 interface AlgoliaHit {
   objectID: string;
@@ -24,15 +35,19 @@ interface AlgoliaResponse {
 }
 
 async function poll(env: Env): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-  const floor = now - WINDOW_DAYS * 86400;
+  const scoreTarget = envNumber(env.SCORE_TARGET, DEFAULT_SCORE_TARGET);
+  const windowDays = envNumber(env.WINDOW_DAYS, DEFAULT_WINDOW_DAYS);
+  const hitsPerPage = envNumber(env.HITS_PER_PAGE, DEFAULT_HITS_PER_PAGE);
 
-  const numericFilters = `points>${SCORE_TARGET},created_at_i>${floor}`;
+  const now = Math.floor(Date.now() / 1000);
+  const floor = now - windowDays * 86400;
+
+  const numericFilters = `points>${scoreTarget},created_at_i>${floor}`;
   const url =
     `https://hn.algolia.com/api/v1/search_by_date` +
     `?tags=story` +
     `&numericFilters=${encodeURIComponent(numericFilters)}` +
-    `&hitsPerPage=${HITS_PER_PAGE}`;
+    `&hitsPerPage=${hitsPerPage}`;
 
   const res = await fetch(url, { headers: { 'User-Agent': 'crest-worker' } });
   if (!res.ok) throw new Error(`Algolia request failed: ${res.status}`);
@@ -90,8 +105,9 @@ async function poll(env: Env): Promise<void> {
 const app = new Hono<{ Bindings: Env }>();
 
 app.get('/api/stories', async (c) => {
+  const pageSize = envNumber(c.env.PAGE_SIZE, DEFAULT_PAGE_SIZE);
   const page = Math.max(1, Number(c.req.query('page')) || 1);
-  const offset = (page - 1) * PAGE_SIZE;
+  const offset = (page - 1) * pageSize;
 
   // Fetch one extra row to know if a next page exists, without a separate COUNT query.
   const { results } = await c.env.crest.prepare(
@@ -100,7 +116,7 @@ app.get('/api/stories', async (c) => {
       ORDER BY first_seen DESC
       LIMIT ? OFFSET ?`,
   )
-    .bind(PAGE_SIZE + 1, offset)
+    .bind(pageSize + 1, offset)
     .all<{
       id: number;
       title: string;
@@ -111,7 +127,7 @@ app.get('/api/stories', async (c) => {
       first_seen: number;
     }>();
 
-  const hasMore = results.length > PAGE_SIZE;
+  const hasMore = results.length > pageSize;
 
   const lastPoll = await c.env.crest
     .prepare(`SELECT v FROM meta WHERE k = 'last_poll'`)
@@ -119,7 +135,7 @@ app.get('/api/stories', async (c) => {
 
   c.header('Cache-Control', 'public, max-age=300');
   return c.json({
-    stories: results.slice(0, PAGE_SIZE).map((r) => ({
+    stories: results.slice(0, pageSize).map((r) => ({
       id: r.id,
       title: r.title,
       url: r.url,

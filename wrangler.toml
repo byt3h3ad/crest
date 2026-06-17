@@ -18,3 +18,11 @@ database_id = "d7b01de9-212d-43e5-9334-b0ad707809df"
 # Poll Hacker News every 10 minutes.
 [triggers]
 crons = ["*/10 * * * *"]
+
+# Tunable thresholds (read as strings, parsed in src/index.ts; these are the
+# fallback defaults so removing this block doesn't change behavior).
+[vars]
+SCORE_TARGET = "150"
+WINDOW_DAYS = "7"
+HITS_PER_PAGE = "1000"
+PAGE_SIZE = "20"
