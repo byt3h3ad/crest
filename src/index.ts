@@ -20,6 +20,13 @@ function envNumber(value: string | undefined, fallback: number): number {
   return Number.isNaN(n) ? fallback : n;
 }
 
+// Escape SQLite LIKE metacharacters in a user-controlled value so '%' and
+// '_' match themselves literally instead of acting as wildcards. Pair with
+// `ESCAPE '\'` on every LIKE clause that binds the escaped value.
+function escapeLikeLiteral(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 interface AlgoliaHit {
   objectID: string;
   title: string | null;
@@ -126,15 +133,15 @@ app.get('/api/stories', async (c) => {
         `SELECT id, title, url, points, num_comments, hn_created, first_seen
            FROM stories
           WHERE (
-            url LIKE 'http://' || ?1 OR url LIKE 'http://' || ?1 || '/%'
-            OR url LIKE 'https://' || ?1 OR url LIKE 'https://' || ?1 || '/%'
-            OR url LIKE 'http://www.' || ?1 OR url LIKE 'http://www.' || ?1 || '/%'
-            OR url LIKE 'https://www.' || ?1 OR url LIKE 'https://www.' || ?1 || '/%'
+            url LIKE 'http://' || ?1 ESCAPE '\\' OR url LIKE 'http://' || ?1 || '/%' ESCAPE '\\'
+            OR url LIKE 'https://' || ?1 ESCAPE '\\' OR url LIKE 'https://' || ?1 || '/%' ESCAPE '\\'
+            OR url LIKE 'http://www.' || ?1 ESCAPE '\\' OR url LIKE 'http://www.' || ?1 || '/%' ESCAPE '\\'
+            OR url LIKE 'https://www.' || ?1 ESCAPE '\\' OR url LIKE 'https://www.' || ?1 || '/%' ESCAPE '\\'
           )
           ORDER BY first_seen DESC
           LIMIT ?2 OFFSET ?3`,
       )
-        .bind(domainFilter, pageSize + 1, offset)
+        .bind(escapeLikeLiteral(domainFilter), pageSize + 1, offset)
         .all<StoryRow>()
     : await c.env.crest.prepare(
         `SELECT id, title, url, points, num_comments, hn_created, first_seen
