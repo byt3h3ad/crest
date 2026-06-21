@@ -34,6 +34,16 @@ interface AlgoliaResponse {
   hits: AlgoliaHit[];
 }
 
+interface StoryRow {
+  id: number;
+  title: string;
+  url: string | null;
+  points: number;
+  num_comments: number;
+  hn_created: number;
+  first_seen: number;
+}
+
 async function poll(env: Env): Promise<void> {
   const scoreTarget = envNumber(env.SCORE_TARGET, DEFAULT_SCORE_TARGET);
   const windowDays = envNumber(env.WINDOW_DAYS, DEFAULT_WINDOW_DAYS);
@@ -111,16 +121,6 @@ app.get('/api/stories', async (c) => {
   const domainFilter = c.req.query('domain');
 
   // Fetch one extra row to know if a next page exists, without a separate COUNT query.
-  type StoryRow = {
-    id: number;
-    title: string;
-    url: string | null;
-    points: number;
-    num_comments: number;
-    hn_created: number;
-    first_seen: number;
-  };
-
   const { results } = domainFilter
     ? await c.env.crest.prepare(
         `SELECT id, title, url, points, num_comments, hn_created, first_seen
@@ -190,15 +190,7 @@ app.get('/feed.xml', async (c) => {
       LIMIT ?`,
   )
     .bind(FEED_ITEM_LIMIT)
-    .all<{
-      id: number;
-      title: string;
-      url: string | null;
-      points: number;
-      num_comments: number;
-      hn_created: number;
-      first_seen: number;
-    }>();
+    .all<StoryRow>();
 
   const items = results
     .map((s) => {
