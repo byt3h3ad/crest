@@ -35,6 +35,15 @@ pnpm exec wrangler dev       # page at http://localhost:8787, API at /api/storie
 
 Trigger the scheduled handler locally (otherwise it only runs on the cron): with `wrangler dev` running, hit its test endpoint — `curl "http://localhost:8787/__scheduled"` — or start with `pnpm exec wrangler dev --test-scheduled`.
 
+## Endpoints
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/stories?page=<n>&domain=<host>` | JSON: `{ stories, page, hasMore, lastPolled, domain }`. `page` defaults to 1. `domain` is optional and filters to stories hosted on that domain (with or without `www.`). |
+| `GET /feed.xml` | RSS 2.0 feed of the 30 most recent qualifying stories. Linked from the page `<head>` for feed-reader auto-discovery. |
+
+Both responses are cached for 5 minutes (`Cache-Control: public, max-age=300`).
+
 ## Tuning
 
 Set in `wrangler.toml`'s `[vars]` block (or the Cloudflare dashboard); removing a var falls back to its default below.
