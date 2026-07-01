@@ -3,9 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crest</title>
+<meta name="description" content="hacker news stories that crossed 150+ points, newest first">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="crest">
+<meta property="og:title" content="crest">
+<meta property="og:description" content="hacker news stories that crossed 150+ points, newest first">
+<meta property="og:url" content="https://hn.adhiraj.rocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="crest">
+<meta name="twitter:description" content="hacker news stories that crossed 150+ points, newest first">
+<title>crest</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="alternate" type="application/rss+xml" title="Crest" href="/feed.xml">
+<link rel="alternate" type="application/rss+xml" title="crest" href="/feed.xml">
 <style>
   :root { color-scheme: light dark; }
   @font-face {
@@ -62,18 +71,18 @@
 </head>
 <body>
 <header>
-  <h1>Crest</h1>
-  <div class="subtitle">Stories that crossed 150+ points, newest first. <span id="checked"></span> <span id="updated"></span> <span id="filterState"></span></div>
+  <h1>crest</h1>
+  <div class="subtitle">stories that crossed 150+ points, newest first. <span id="checked"></span> <span id="updated"></span> <span id="filterState"></span></div>
 </header>
 <ol id="list">
-  <li class="empty">Loading…</li>
+  <li class="empty">loading…</li>
 </ol>
 <nav class="pager" id="pager" hidden>
-  <button id="prevBtn">&larr; Newer</button>
+  <button id="prevBtn">&larr; newer</button>
   <span id="pageLabel"></span>
-  <button id="nextBtn">Older &rarr;</button>
+  <button id="nextBtn">older &rarr;</button>
 </nav>
-<footer>Sourced from the Hacker News (Algolia) API · refreshes every 10 minutes</footer>
+<footer>sourced from the hacker news (algolia) api · refreshes every 10 minutes</footer>
 <script>
 function ago(fromUnix, now) {
   const s = Math.max(0, now - fromUnix);
@@ -123,17 +132,17 @@ async function load(page) {
 
     currentPage = page;
     pager.hidden = page === 1 && !hasMore;
-    pageLabel.textContent = 'Page ' + page;
+    pageLabel.textContent = 'page ' + page;
     prevBtn.disabled = page === 1;
     nextBtn.disabled = !hasMore;
 
     list.textContent = '';
-    checked.textContent = lastPolled ? 'Last checked ' + ago(lastPolled, now) + '.' : '';
-    updated.textContent = page === 1 && stories.length ? 'Newest added ' + ago(stories[0].first_seen, now) + '.' : '';
+    checked.textContent = lastPolled ? 'last checked ' + ago(lastPolled, now) + '.' : '';
+    updated.textContent = page === 1 && stories.length ? 'newest added ' + ago(stories[0].first_seen, now) + '.' : '';
 
     filterState.textContent = '';
     if (currentDomain) {
-      filterState.appendChild(document.createTextNode('Filtered by ' + currentDomain + ' ('));
+      filterState.appendChild(document.createTextNode('filtered by ' + currentDomain + ' ('));
       const clearLink = document.createElement('a');
       clearLink.href = '#';
       clearLink.textContent = 'clear';
@@ -150,8 +159,8 @@ async function load(page) {
       const li = document.createElement('li');
       li.className = 'empty';
       li.textContent = page === 1
-        ? 'No stories yet — the poller runs every 10 minutes.'
-        : 'No more stories.';
+        ? 'no stories yet — the poller runs every 10 minutes.'
+        : 'no more stories.';
       list.appendChild(li);
       return;
     }
@@ -201,7 +210,7 @@ async function load(page) {
     list.textContent = '';
     const li = document.createElement('li');
     li.className = 'empty';
-    li.textContent = "Couldn't load stories. Try refreshing.";
+    li.textContent = "couldn't load stories. try refreshing.";
     list.appendChild(li);
   }
 }
