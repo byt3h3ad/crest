@@ -17,6 +17,13 @@ your row when done.
 | 005  | Document `/feed.xml` and the `domain` filter in README | P3 | S | — | DONE |
 | 006  | Deduplicate the story-row type between `/api/stories` and `/feed.xml` | P3 | S | — | DONE |
 
+## Incident reports
+
+- **007** — [Poller outage: Algolia dropped `points` as a filterable
+  attribute](./007-poller-outage-rca.md). Not an implementation plan (it's
+  a retrospective on an already-resolved 2026-07-08/09 outage), so it's
+  excluded from the execution-order table above.
+
 ## Dependency notes
 
 - Plans 001-003 don't depend on each other and were executed independently.
