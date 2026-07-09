@@ -9,7 +9,13 @@ export interface Env {
 }
 
 const DEFAULT_SCORE_TARGET = 150; // points threshold
-const DEFAULT_WINDOW_DAYS = 7; // late-bloomer tolerance
+// Algolia hard-caps search_by_date at 1000 total hits with no working
+// pagination past that (github.com/algolia/hn-search/issues/230), and since
+// 2026-07-08 it can no longer filter by points server-side (undocumented
+// index change), so this query now returns *all* stories, not just
+// qualifying ones. At current HN volume, 1000 hits only reaches back ~20h
+// regardless of this setting — so a multi-day window is no longer honest.
+const DEFAULT_WINDOW_DAYS = 1; // late-bloomer tolerance
 const DEFAULT_HITS_PER_PAGE = 1000; // must exceed qualifying stories in the window
 const DEFAULT_PAGE_SIZE = 20; // stories per page
 
@@ -59,7 +65,11 @@ async function poll(env: Env): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const floor = now - windowDays * 86400;
 
-  const numericFilters = `points>${scoreTarget},created_at_i>${floor}`;
+  // points is no longer in Algolia's numericAttributesForFiltering for this
+  // index (as of 2026-07-08, undocumented server-side change), so filtering
+  // by points>N now 400s. Filter by date only and apply the score threshold
+  // client-side below using the points value each hit still carries.
+  const numericFilters = `created_at_i>${floor}`;
   const url =
     `https://hn.algolia.com/api/v1/search_by_date` +
     `?tags=story` +
@@ -78,7 +88,7 @@ async function poll(env: Env): Promise<void> {
     .bind(now)
     .run();
 
-  const valid = hits.filter((h) => h.title && typeof h.points === 'number');
+  const valid = hits.filter((h) => h.title && typeof h.points === 'number' && h.points > scoreTarget);
   if (valid.length === 0) return;
 
   const ids = valid.map((h) => Number(h.objectID));

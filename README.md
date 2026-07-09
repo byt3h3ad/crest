@@ -51,7 +51,7 @@ Set in `wrangler.toml`'s `[vars]` block (or the Cloudflare dashboard); removing 
 | Var | Meaning | Default |
 | --- | --- | --- |
 | `SCORE_TARGET` | Points threshold for inclusion | 150 |
-| `WINDOW_DAYS` | How late a bloomer is still caught | 7 |
+| `WINDOW_DAYS` | How late a bloomer is still caught | 1 |
 | `HITS_PER_PAGE` | Must exceed qualifying stories in the window | 1000 |
 | `PAGE_SIZE` | Stories per page, API and frontend | 20 |
 
