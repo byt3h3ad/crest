@@ -51,6 +51,23 @@ interface StoryRow {
   first_seen: number;
 }
 
+function buildAlgoliaUrl(
+  scoreTarget: number,
+  floor: number,
+  hitsPerPage: number,
+  includePointsFilter: boolean,
+): string {
+  const numericFilters = includePointsFilter
+    ? `points>${scoreTarget},created_at_i>${floor}`
+    : `created_at_i>${floor}`;
+  return (
+    `https://hn.algolia.com/api/v1/search_by_date` +
+    `?tags=story` +
+    `&numericFilters=${encodeURIComponent(numericFilters)}` +
+    `&hitsPerPage=${hitsPerPage}`
+  );
+}
+
 async function poll(env: Env): Promise<void> {
   const scoreTarget = envNumber(env.SCORE_TARGET, DEFAULT_SCORE_TARGET);
   const windowDays = envNumber(env.WINDOW_DAYS, DEFAULT_WINDOW_DAYS);
@@ -59,14 +76,31 @@ async function poll(env: Env): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   const floor = now - windowDays * 86400;
 
-  const numericFilters = `points>${scoreTarget},created_at_i>${floor}`;
-  const url =
-    `https://hn.algolia.com/api/v1/search_by_date` +
-    `?tags=story` +
-    `&numericFilters=${encodeURIComponent(numericFilters)}` +
-    `&hitsPerPage=${hitsPerPage}`;
+  let res = await fetch(buildAlgoliaUrl(scoreTarget, floor, hitsPerPage, true), {
+    headers: { 'User-Agent': 'crest-worker' },
+  });
 
-  const res = await fetch(url, { headers: { 'User-Agent': 'crest-worker' } });
+  if (res.status === 400) {
+    const body = await res.text();
+    // Algolia has twice (2026-07-08, restored 2026-07-13; see
+    // plans/007-poller-outage-rca.md) silently toggled whether `points` is in
+    // numericAttributesForFiltering for this index. Only retry on that exact
+    // error text — treating every 400 as this case would mask a genuinely
+    // different bug (e.g. a malformed numericFilters value) instead of
+    // alerting via the dashboard as it should. A fallback poll's effective
+    // time coverage automatically shrinks toward Algolia's 1000-hit cap
+    // (the unfiltered result set is much larger than the qualifying-only
+    // set) and self-corrects the next time the primary request succeeds —
+    // WINDOW_DAYS doesn't need to change for this.
+    if (/numericAttributesForFiltering/.test(body)) {
+      console.warn('Algolia points filter unavailable (400), falling back to date-only query + client-side score filter');
+      res = await fetch(buildAlgoliaUrl(scoreTarget, floor, hitsPerPage, false), {
+        headers: { 'User-Agent': 'crest-worker' },
+      });
+    } else {
+      throw new Error(`Algolia request failed: ${res.status} ${body}`);
+    }
+  }
   if (!res.ok) throw new Error(`Algolia request failed: ${res.status}`);
 
   const { hits } = (await res.json()) as AlgoliaResponse;
@@ -78,7 +112,7 @@ async function poll(env: Env): Promise<void> {
     .bind(now)
     .run();
 
-  const valid = hits.filter((h) => h.title && typeof h.points === 'number');
+  const valid = hits.filter((h) => h.title && typeof h.points === 'number' && h.points > scoreTarget);
   if (valid.length === 0) return;
 
   const ids = valid.map((h) => Number(h.objectID));
