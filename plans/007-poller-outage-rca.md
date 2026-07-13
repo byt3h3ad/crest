@@ -125,6 +125,28 @@ takes longer than ~20h to cross the score threshold will no longer be
 caught as a "late bloomer." Accepted as-is; not addressed further this
 round.
 
+## Closing note 2026-07-13: this failure mode now self-heals
+
+Since this exact failure had already recurred once (broke 2026-07-08,
+fixed 2026-07-13, both requiring a human to notice the dashboard and
+hand-deploy the fix), `poll()` was changed (commit `7668675`) to detect
+this specific error automatically and recover without a redeploy: it always
+tries the server-filtered query first, and only on the exact
+`numericAttributesForFiltering` error text, retries once date-only with the
+score filter applied client-side (the same logic this RCA's fix used,
+now conditional instead of hand-deployed). Because every poll retries the
+ideal path first, the next tick after Algolia restores `points` recovers on
+its own — no stored state, no human involvement. Other 400s (e.g. a
+malformed filter) still throw and alert via the dashboard as before, so
+this doesn't create a new silent-failure mode.
+
+This directly closes the "no alerting on repeated scheduled-event failures"
+follow-up below for this specific failure shape — there's nothing to alert
+on anymore, because there's nothing left for a human to fix. The general
+gap (no alerting for *other*, unrelated scheduled-event failures) still
+stands. See `src/index.ts`'s `poll()` and commit `7668675` for the
+implementation.
+
 ## Follow-ups considered, not actioned
 
 - **Restore full late-bloomer coverage** by switching the data source to
