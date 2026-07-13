@@ -4,7 +4,10 @@
 - **Detected**: 2026-07-09, via Cloudflare dashboard showing errors and no
   feed updates for 13 hours (user-reported; no automated alerting exists —
   see Follow-ups)
-- **Resolved**: 2026-07-09 07:26 UTC (deploy), verified live at 07:30 UTC
+- **Resolved (workaround)**: 2026-07-09 07:26 UTC (deploy), verified live at
+  07:30 UTC
+- **Resolved (fully, upstream fixed)**: 2026-07-13, workaround reverted in
+  `f973b8f` — see Update below
 - **Fix commit**: `7da3c25` — "Fix poller outage: Algolia dropped points as
   a filterable attribute"
 - **Severity**: feed stopped updating; no data loss, no user-facing errors
@@ -80,6 +83,25 @@ Deployed via `pnpm run deploy` at 2026-07-09 07:26 UTC. Verified live: a
 `wrangler tail` session caught the 07:30 UTC cron tick returning `Ok`, and
 `meta.last_poll` advanced from `1783533026` to `1783582231`
 (2026-07-08 17:50 UTC → 2026-07-09 07:30 UTC).
+
+## Update 2026-07-13: upstream restored, workaround reverted
+
+Confirmed via direct `curl` that `hn.algolia.com/api/v1/search_by_date` once
+again accepts `numericFilters=points>150,created_at_i>{floor}` (`HTTP 200`,
+was `400` since 2026-07-08). Algolia silently restored `points` to
+`numericAttributesForFiltering` — no announcement, same as when it broke.
+
+Reverted the workaround in full (commit `f973b8f`): server-side
+`points>{threshold}` filtering restored, client-side score filter removed,
+`WINDOW_DAYS` default back to `7`. Deployed and verified live — a
+`wrangler tail` session caught the next cron tick returning `Ok`, and
+`meta.last_poll` advanced to match (2026-07-13 17:40:38 UTC), with no `400`s.
+
+The "known limitation" and its `WINDOW_DAYS`/1000-hit-cap consequence below
+no longer apply as of this revert — left in place as a historical record of
+what the workaround cost while it was active. Same for the Firebase
+follow-up in the section after: it was scoped as a fix for that limitation,
+so it's moot until/unless `points` filtering breaks again.
 
 ## Known limitation (accepted, not further fixed)
 
