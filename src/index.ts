@@ -3,14 +3,12 @@ import { Hono } from 'hono';
 export interface Env {
   crest: D1Database;
   SCORE_TARGET?: string;
-  WINDOW_DAYS?: string;
   HITS_PER_PAGE?: string;
   PAGE_SIZE?: string;
 }
 
 const DEFAULT_SCORE_TARGET = 150; // points threshold
-const DEFAULT_WINDOW_DAYS = 7; // late-bloomer tolerance
-const DEFAULT_HITS_PER_PAGE = 1000; // must exceed qualifying stories in the window
+const DEFAULT_HITS_PER_PAGE = 1000; // newest qualifying stories per poll
 const DEFAULT_PAGE_SIZE = 20; // stories per page
 
 // Vars arrive as strings (or unset); fall back to the default on unset or NaN.
@@ -51,32 +49,23 @@ interface StoryRow {
   first_seen: number;
 }
 
-function buildAlgoliaUrl(
-  scoreTarget: number,
-  floor: number,
-  hitsPerPage: number,
-  includePointsFilter: boolean,
-): string {
-  const numericFilters = includePointsFilter
-    ? `points>${scoreTarget},created_at_i>${floor}`
-    : `created_at_i>${floor}`;
+function buildAlgoliaUrl(scoreTarget: number, hitsPerPage: number, includePointsFilter: boolean): string {
+  const numericFilters = includePointsFilter ? `&numericFilters=${encodeURIComponent(`points>${scoreTarget}`)}` : '';
   return (
     `https://hn.algolia.com/api/v1/search_by_date` +
     `?tags=story` +
-    `&numericFilters=${encodeURIComponent(numericFilters)}` +
+    numericFilters +
     `&hitsPerPage=${hitsPerPage}`
   );
 }
 
 async function poll(env: Env): Promise<void> {
   const scoreTarget = envNumber(env.SCORE_TARGET, DEFAULT_SCORE_TARGET);
-  const windowDays = envNumber(env.WINDOW_DAYS, DEFAULT_WINDOW_DAYS);
   const hitsPerPage = envNumber(env.HITS_PER_PAGE, DEFAULT_HITS_PER_PAGE);
 
   const now = Math.floor(Date.now() / 1000);
-  const floor = now - windowDays * 86400;
 
-  let res = await fetch(buildAlgoliaUrl(scoreTarget, floor, hitsPerPage, true), {
+  let res = await fetch(buildAlgoliaUrl(scoreTarget, hitsPerPage, true), {
     headers: { 'User-Agent': 'crest-worker' },
   });
 
@@ -88,13 +77,12 @@ async function poll(env: Env): Promise<void> {
     // error text — treating every 400 as this case would mask a genuinely
     // different bug (e.g. a malformed numericFilters value) instead of
     // alerting via the dashboard as it should. A fallback poll's effective
-    // time coverage automatically shrinks toward Algolia's 1000-hit cap
-    // (the unfiltered result set is much larger than the qualifying-only
-    // set) and self-corrects the next time the primary request succeeds —
-    // WINDOW_DAYS doesn't need to change for this.
+    // time coverage is bounded by Algolia's 1000-hit cap (the unfiltered
+    // result set is much larger than the qualifying-only set) and
+    // self-corrects the next time the primary request succeeds.
     if (/numericAttributesForFiltering/.test(body)) {
       console.warn('Algolia points filter unavailable (400), falling back to date-only query + client-side score filter');
-      res = await fetch(buildAlgoliaUrl(scoreTarget, floor, hitsPerPage, false), {
+      res = await fetch(buildAlgoliaUrl(scoreTarget, hitsPerPage, false), {
         headers: { 'User-Agent': 'crest-worker' },
       });
     } else {

@@ -23,6 +23,5 @@ crons = ["*/10 * * * *"]
 # fallback defaults so removing this block doesn't change behavior).
 [vars]
 SCORE_TARGET = "150"
-WINDOW_DAYS = "7"
 HITS_PER_PAGE = "1000"
 PAGE_SIZE = "20"

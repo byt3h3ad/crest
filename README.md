@@ -51,10 +51,11 @@ Set in `wrangler.toml`'s `[vars]` block (or the Cloudflare dashboard); removing 
 | Var | Meaning | Default |
 | --- | --- | --- |
 | `SCORE_TARGET` | Points threshold for inclusion | 150 |
-| `WINDOW_DAYS` | How late a bloomer is still caught | 7 |
-| `HITS_PER_PAGE` | Must exceed qualifying stories in the window | 1000 |
+| `HITS_PER_PAGE` | Newest qualifying stories fetched per poll | 1000 |
 | `PAGE_SIZE` | Stories per page, API and frontend | 20 |
 
 ## `first_seen` semantics
 
 `first_seen` is the moment the *poller* observed a story crossing the threshold — not when it was posted to HN (`hn_created`), and not page-load time. The feed sorts by `first_seen`, so a story posted days ago that only now crosses 150 points still shows up as "new."
+
+The poll has no explicit day-based cutoff — it fetches the newest `HITS_PER_PAGE` qualifying stories each run, so late bloomers are caught for as long as they stay within that count from the front. On typical volume that's several weeks; on Algolia's client-side-filter fallback (see `plans/007-poller-outage-rca.md`) it's much less, since the 1000-hit cap is spent on unfiltered results instead.
